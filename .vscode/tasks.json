@@ -3,7 +3,7 @@
   "tasks": [{
     "label": "build windows",
     "type": "shell",
-    "command": "GOOS=windows GOARCH=amd64 go build -o ecoflow.exe .",
+    "command": "GOOS=windows GOARCH=amd64 go build -o ecoflow.exe ./cmd/ecoflow-monitor",
     "group": { "kind": "build", "isDefault": true },
     "problemMatcher": ["$go"]
   }]
