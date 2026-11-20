@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strconv"
 	"time"
 )
@@ -15,6 +16,8 @@ var ErrInvalidAccessKey = errors.New("config: invalid AccessKey")
 var ErrInvalidSecretKey = errors.New("config: invalid SecretKey")
 var ErrInvalidHost = errors.New("config: invalid Host")
 var ErrInvalidInterval = errors.New("config: invalid Interval")
+
+var domainRegex = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$`)
 
 type Config struct {
 	AccessKey string
@@ -56,7 +59,7 @@ func Load(path string) (*Config, error) {
 		if interval <= 0 {
 			return nil, fmt.Errorf("%w: value is invalid", ErrInvalidInterval)
 		} else if interval < 10 {
-			return nil, fmt.Errorf("%w: too fast", ErrInvalidInterval)
+			return nil, fmt.Errorf("%w: must be at least 10 seconds", ErrInvalidInterval)
 		}
 		conf.Interval = time.Duration(interval) * time.Second
 	}
@@ -68,6 +71,10 @@ func Load(path string) (*Config, error) {
 	} else {
 		u, err := url.ParseRequestURI(envData["EF_HOST"])
 		if (err != nil) || (u.Scheme != "https") || (u.Host == "") {
+			return nil, fmt.Errorf("%w: value is invalid", ErrInvalidHost)
+		}
+		// отсеем штуки типа "https://exmap'le.com" или "https://exmap      le.com"
+		if !domainRegex.MatchString(u.Hostname()) {
 			return nil, fmt.Errorf("%w: value is invalid", ErrInvalidHost)
 		}
 	}
