@@ -3,11 +3,15 @@ package config
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"strings"
 )
 
 var ErrInvalidLine = errors.New("dotenv: incorrect line format")
+
+var ErrEnvFileNotFound = errors.New("dotenv: .env file not found")
+var ErrEnvFileUnreadable = errors.New("dotenv: cannot read .env file")
 
 const bom = "\uFEFF"
 
@@ -16,7 +20,10 @@ func parse(path string) (map[string]string, error) {
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("dotenv: %w: error open file", err)
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, fmt.Errorf("%w: %w", ErrEnvFileNotFound, err)
+		}
+		return nil, fmt.Errorf("%w: %w", ErrEnvFileUnreadable, err)
 	}
 	content := strings.ReplaceAll(string(data), "\r\n", "\n")
 
