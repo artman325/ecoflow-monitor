@@ -5,8 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"maps"
+	"math/rand/v2"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 )
 
 func computeHMAC256(message, secret string) string {
@@ -48,4 +51,14 @@ func sign(params map[string]string, accessKey string, secretKey string, nonce st
 	payload := strings.Join(sortedParamsList, "&")
 	return computeHMAC256(payload, secretKey)
 
+}
+
+func nonce() string {
+	minNonce := 100000
+	maxNonce := 999999
+	return strconv.Itoa(rand.IntN(maxNonce-minNonce+1) + minNonce)
+}
+
+func timestamp() string {
+	return strconv.FormatInt(time.Now().UnixMilli(), 10)
 }
