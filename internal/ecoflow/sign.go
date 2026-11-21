@@ -53,12 +53,12 @@ func sign(params map[string]string, accessKey string, secretKey string, nonce st
 
 }
 
-func nonce() string {
+func generateNonce() string {
 	minNonce := 100000
 	maxNonce := 999999
 	return strconv.Itoa(rand.IntN(maxNonce-minNonce+1) + minNonce)
 }
 
-func timestamp() string {
+func currentTimestamp() string {
 	return strconv.FormatInt(time.Now().UnixMilli(), 10)
 }

@@ -36,3 +36,5 @@ go.work.sum
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
+
+__debug_bin*
