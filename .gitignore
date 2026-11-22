@@ -38,3 +38,4 @@ go.work.sum
 !.vscode/launch.json
 
 __debug_bin*
+*.local.md
