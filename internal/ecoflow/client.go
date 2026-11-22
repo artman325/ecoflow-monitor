@@ -52,7 +52,7 @@ type DeviceStatus struct {
 	InputWatts     int `json:"inv.inputWatts"`    // AC input (grid) power, W; 0 while plugged in means grid power is out
 	OutputWatts    int `json:"inv.outputWatts"`   // AC outlets output power, W
 	Temp           int `json:"bmsMaster.temp"`    // main battery temperature, °C
-	SysChgDsgState int `json:"pd.sysChgDsgState"` // observed: 2 = charging; other values TBD
+	SysChgDsgState int `json:"pd.sysChgDsgState"` // observed: 1 = discharging, 2 = charging; passthrough TBD
 }
 
 func (c *Client) DeviceList() ([]DeviceInfo, error) {
