@@ -1,12 +1,16 @@
 package ecoflow
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 )
+
+var ErrDeviceOffline = errors.New("device offline")
 
 type Client struct {
 	httpClient *http.Client
@@ -26,17 +30,73 @@ func NewClient(host, accessKey, secretKey string) *Client {
 	}
 }
 
+type apiResponse struct {
+	Code    string          `json:"code"`
+	Message string          `json:"message"`
+	Data    json.RawMessage `json:"data"`
+}
+
+type DeviceInfo struct {
+	SN          string `json:"sn"`
+	DeviceName  string `json:"deviceName"`
+	Online      int    `json:"online"`
+	ProductName string `json:"productName"`
+}
+
+type DeviceStatus struct {
+	LcdShowSoc  int `json:"ems.lcdShowSoc"` // battery level shown on the station's screen, %
+	WattsInSum  int `json:"pd.wattsInSum"`  // total input power, W
+	WattsOutSum int `json:"pd.wattsOutSum"` // total output power (all ports), W
+	RemainTime  int `json:"pd.remainTime"`  // minutes until full (charging) or until empty (discharging), always positive; 5999 = neither
+
+	InputWatts     int `json:"inv.inputWatts"`    // AC input (grid) power, W; 0 while plugged in means grid power is out
+	OutputWatts    int `json:"inv.outputWatts"`   // AC outlets output power, W
+	Temp           int `json:"bmsMaster.temp"`    // main battery temperature, °C
+	SysChgDsgState int `json:"pd.sysChgDsgState"` // observed: 2 = charging; other values TBD
+}
+
 func (c *Client) DeviceList() ([]byte, error) {
-	endpoint := c.host + "/iot-open/sign/device/list"
+	path := "/iot-open/sign/device/list"
+
+	var params map[string]string
+	res, err := c.get(path, params)
+	if err != nil {
+		return nil, fmt.Errorf("device list: %w", err)
+	}
+
+	return res, nil
+}
+
+func (c *Client) DeviceQuota(sn string) ([]byte, error) {
+	path := "/iot-open/sign/device/quota/all"
+
+	params := make(map[string]string)
+	params["sn"] = sn
+
+	res, err := c.get(path, params)
+	if err != nil {
+		return nil, fmt.Errorf("device list: %w", err)
+	}
+
+	return res, nil
+
+}
+
+func (c *Client) get(path string, params map[string]string) (json.RawMessage, error) {
+	endpoint := c.host + path
 	nonce := generateNonce()
 	timestamp := currentTimestamp()
 
-	params := make(map[string]string)
-
 	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
 	if err != nil {
-		return nil, fmt.Errorf("device list: create request: %w", err)
+		return nil, fmt.Errorf("create request: %w", err)
 	}
+
+	var v = make(url.Values)
+	for key, val := range params {
+		v.Set(key, val)
+	}
+	req.URL.RawQuery = v.Encode()
 
 	req.Header.Set("accessKey", c.accessKey)
 	req.Header.Set("nonce", nonce)
@@ -45,20 +105,25 @@ func (c *Client) DeviceList() ([]byte, error) {
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("device list: do request: %w", err)
+		return nil, fmt.Errorf("do request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	res, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("device list: read response body: %w", err)
+		return nil, fmt.Errorf("read response body: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("device list: unexpected status %s: %s", resp.Status, res[:min(len(res), 200)])
+		return nil, fmt.Errorf("unexpected status %s: %s", resp.Status, res[:min(len(res), 200)])
 	}
-	return res, nil
-}
 
-func (c *Client) DeviceQuota(sn string) ([]byte, error) {
-	return nil, errors.New("device quota: not implemented")
+	var rawResponse apiResponse
+	if err := json.Unmarshal(res, &rawResponse); err != nil {
+		return nil, fmt.Errorf("unmarshal: %w", err)
+	}
+	if rawResponse.Code != "0" {
+		return nil, fmt.Errorf("api error %s: signature is wrong %s", rawResponse.Code, rawResponse.Message)
+	}
+
+	return rawResponse.Data, nil
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -33,6 +34,24 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	fmt.Println(string(resp))
+	var deviceInfo []ecoflow.DeviceInfo
+	if err := json.Unmarshal(resp, &deviceInfo); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	resp, err = c.DeviceQuota(deviceInfo[0].SN)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	var deviceStatus ecoflow.DeviceStatus
+	if err := json.Unmarshal(resp, &deviceStatus); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	fmt.Println(deviceInfo)
+	fmt.Println(deviceStatus)
 
 }
