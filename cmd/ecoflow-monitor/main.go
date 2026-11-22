@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -29,29 +28,20 @@ func main() {
 	}
 
 	c := ecoflow.NewClient(cfg.Host, cfg.AccessKey, cfg.SecretKey)
-	resp, err := c.DeviceList()
+
+	devices, err := c.DeviceList()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	var deviceInfo []ecoflow.DeviceInfo
-	if err := json.Unmarshal(resp, &deviceInfo); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
 
-	resp, err = c.DeviceQuota(deviceInfo[0].SN)
+	deviceStatus, err := c.DeviceQuota(devices[0].SN)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	var deviceStatus ecoflow.DeviceStatus
-	if err := json.Unmarshal(resp, &deviceStatus); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
 
-	fmt.Println(deviceInfo)
-	fmt.Println(deviceStatus)
+	fmt.Println(devices)
+	fmt.Println(*deviceStatus)
 
 }

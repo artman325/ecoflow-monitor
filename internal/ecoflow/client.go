@@ -55,7 +55,7 @@ type DeviceStatus struct {
 	SysChgDsgState int `json:"pd.sysChgDsgState"` // observed: 2 = charging; other values TBD
 }
 
-func (c *Client) DeviceList() ([]byte, error) {
+func (c *Client) DeviceList() ([]DeviceInfo, error) {
 	path := "/iot-open/sign/device/list"
 
 	var params map[string]string
@@ -64,10 +64,16 @@ func (c *Client) DeviceList() ([]byte, error) {
 		return nil, fmt.Errorf("device list: %w", err)
 	}
 
-	return res, nil
+	var devices []DeviceInfo
+	if err := json.Unmarshal(res, &devices); err != nil {
+		return nil, fmt.Errorf("device list: decode data: %w", err)
+
+	}
+
+	return devices, nil
 }
 
-func (c *Client) DeviceQuota(sn string) ([]byte, error) {
+func (c *Client) DeviceQuota(sn string) (*DeviceStatus, error) {
 	path := "/iot-open/sign/device/quota/all"
 
 	params := make(map[string]string)
@@ -75,10 +81,15 @@ func (c *Client) DeviceQuota(sn string) ([]byte, error) {
 
 	res, err := c.get(path, params)
 	if err != nil {
-		return nil, fmt.Errorf("device list: %w", err)
+		return nil, fmt.Errorf("device quota: %w", err)
 	}
 
-	return res, nil
+	var deviceStatus DeviceStatus
+	if err := json.Unmarshal(res, &deviceStatus); err != nil {
+		return nil, fmt.Errorf("device quota: decode data: %w", err)
+	}
+
+	return &deviceStatus, nil
 
 }
 
@@ -119,10 +130,10 @@ func (c *Client) get(path string, params map[string]string) (json.RawMessage, er
 
 	var rawResponse apiResponse
 	if err := json.Unmarshal(res, &rawResponse); err != nil {
-		return nil, fmt.Errorf("unmarshal: %w", err)
+		return nil, fmt.Errorf("decode response: %w", err)
 	}
 	if rawResponse.Code != "0" {
-		return nil, fmt.Errorf("api error %s: signature is wrong %s", rawResponse.Code, rawResponse.Message)
+		return nil, fmt.Errorf("api error %s: %s", rawResponse.Code, rawResponse.Message)
 	}
 
 	return rawResponse.Data, nil
