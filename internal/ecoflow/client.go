@@ -55,6 +55,24 @@ type DeviceStatus struct {
 	SysChgDsgState int `json:"pd.sysChgDsgState"` // observed: 1 = discharging, 2 = charging; passthrough TBD
 }
 
+type APIError struct {
+	Code    string
+	Message string
+}
+
+const (
+	codeInvalidAccessKey   = "8513"
+	codeInvalidSignature   = "8521"
+	codeDeviceNoPermission = "8512" // observed for an SN that is not bound to the account
+)
+
+func (e *APIError) Error() string {
+	return fmt.Sprintf("api error %s: %s", e.Code, e.Message)
+}
+func (e *APIError) IsCredentialsError() bool {
+	return e.Code == codeInvalidAccessKey || e.Code == codeInvalidSignature
+}
+
 func (c *Client) DeviceList() ([]DeviceInfo, error) {
 	path := "/iot-open/sign/device/list"
 
@@ -133,7 +151,7 @@ func (c *Client) get(path string, params map[string]string) (json.RawMessage, er
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 	if rawResponse.Code != "0" {
-		return nil, fmt.Errorf("api error %s: %s", rawResponse.Code, rawResponse.Message)
+		return nil, &APIError{Code: rawResponse.Code, Message: rawResponse.Message}
 	}
 
 	return rawResponse.Data, nil
