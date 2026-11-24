@@ -31,21 +31,32 @@ func main() {
 	c := ecoflow.NewClient(cfg.Host, cfg.AccessKey, cfg.SecretKey)
 
 	devices, err := c.DeviceList()
-	handleError(err)
+	handleError(err, cfg)
 
-	deviceStatus, err := c.DeviceQuota(devices[0].SN)
-	handleError(err)
+	device, err := ecoflow.SelectDevice(devices, cfg.SN)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		if errors.Is(err, ecoflow.ErrMultipleDevices) {
+			fmt.Fprintln(os.Stderr, "hint: set EF_SN in .env to one of the SNs above")
+		}
+		os.Exit(1)
+	}
+
+	deviceStatus, err := c.DeviceQuota(device.SN)
+	handleError(err, cfg)
 
 	fmt.Println(devices)
 	fmt.Println(*deviceStatus)
 
 }
 
-func handleError(err error) {
+func handleError(err error, cfg *config.Config) {
 	if err == nil {
 		return
 	}
+	if cfg.SN == "" {
 
+	}
 	var apiErr *ecoflow.APIError
 	if errors.As(err, &apiErr) {
 		if apiErr.IsCredentialsError() {
