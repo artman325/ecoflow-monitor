@@ -1,17 +1,28 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"time"
 
 	"github.com/artman325/ecoflow-monitor/internal/config"
 	"github.com/artman325/ecoflow-monitor/internal/ecoflow"
 )
 
+type refreshResult struct {
+	device *ecoflow.DeviceInfo
+	status *ecoflow.DeviceStatus
+	err    error
+}
+
 func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
 
 	e, err := os.Executable()
 	if err != nil {
@@ -30,45 +41,77 @@ func main() {
 
 	c := ecoflow.NewClient(cfg.Host, cfg.AccessKey, cfg.SecretKey)
 
-	devices, err := c.DeviceList()
-	handleError(err, cfg)
+	run(ctx, c, cfg)
 
-	device, err := ecoflow.SelectDevice(devices, cfg.SN)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		if errors.Is(err, ecoflow.ErrMultipleDevices) {
-			fmt.Fprintln(os.Stderr, "hint: set EF_SN in .env to one of the SNs above")
-		}
-		os.Exit(1)
-	}
-
-	deviceStatus, err := c.DeviceQuota(device.SN)
-	handleError(err, cfg)
-
-	fmt.Println(devices)
-	fmt.Println(*deviceStatus)
-
+	fmt.Println("Программа корректно завершена")
 }
 
-func handleError(err error, cfg *config.Config) {
-	if err == nil {
-		return
-	}
-	if cfg.SN == "" {
+func run(ctx context.Context, c *ecoflow.Client, cfg *config.Config) {
 
+	pause := 5 * time.Second
+	for {
+		res := refresh(c, cfg)
+		if res.err != nil {
+			fmt.Fprintln(os.Stderr, res.err)
+			fmt.Fprintln(os.Stderr, errorCategory(res.err))
+
+			if errors.Is(res.err, ecoflow.ErrMultipleDevices) {
+				fmt.Fprintln(os.Stderr, "hint: set EF_SN in .env to one of the SNs above")
+			}
+		} else {
+
+			fmt.Println(res.device)
+			fmt.Println(res.status)
+		}
+
+		select {
+		case <-ctx.Done():
+			// Контекст отменен — выходим из функции и прерываем бесконечный цикл
+			fmt.Println("Остановка цикла:", ctx.Err())
+			return
+		case <-time.After(pause):
+			fmt.Println("Работаю...")
+		}
 	}
+}
+
+func refresh(c *ecoflow.Client, cfg *config.Config) refreshResult {
+
+	var res refreshResult
+	var devices []ecoflow.DeviceInfo
+
+	devices, res.err = c.DeviceList()
+	if res.err != nil {
+		return res
+	}
+
+	res.device, res.err = ecoflow.SelectDevice(devices, cfg.SN)
+
+	if res.err != nil {
+		return res
+	}
+
+	res.status, res.err = c.DeviceQuota(res.device.SN)
+
+	return res
+}
+
+func errorCategory(err error) string {
+
+	if err == nil {
+		return ""
+	}
+
 	var apiErr *ecoflow.APIError
 	if errors.As(err, &apiErr) {
 		if apiErr.IsCredentialsError() {
-			fmt.Fprintln(os.Stderr, "credentials:", err)
+			return "credentials"
 		} else {
-			fmt.Fprintln(os.Stderr, "api:", err)
+			return "api"
 		}
-
-	} else {
-		fmt.Fprintln(os.Stderr, "connection:", err)
-
+	} else if ecoflow.IsDeviceError(err) {
+		return "device"
 	}
-	os.Exit(1)
+	return "connection"
 
 }

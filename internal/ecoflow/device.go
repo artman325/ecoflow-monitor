@@ -10,6 +10,10 @@ var ErrDeviceWithSNNotFound = errors.New("device: SN not found")
 var ErrDeviceNotFound = errors.New("device: not found")
 var ErrMultipleDevices = errors.New("device: multiple devices found")
 
+func IsDeviceError(err error) bool {
+	return errors.Is(err, ErrDeviceWithSNNotFound) || errors.Is(err, ErrDeviceNotFound) || errors.Is(err, ErrMultipleDevices)
+}
+
 func SelectDevice(devices []DeviceInfo, sn string) (*DeviceInfo, error) {
 
 	if len(devices) == 0 {

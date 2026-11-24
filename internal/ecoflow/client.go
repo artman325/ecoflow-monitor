@@ -2,15 +2,12 @@ package ecoflow
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"time"
 )
-
-var ErrDeviceOffline = errors.New("device offline")
 
 type Client struct {
 	httpClient *http.Client
