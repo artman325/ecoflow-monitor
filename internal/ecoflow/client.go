@@ -40,7 +40,7 @@ type DeviceInfo struct {
 	ProductName string `json:"productName"`
 }
 
-type DeviceStatus struct {
+type Telemetry struct {
 	LcdShowSoc  int `json:"ems.lcdShowSoc"` // battery level shown on the station's screen, %
 	WattsInSum  int `json:"pd.wattsInSum"`  // total input power, W
 	WattsOutSum int `json:"pd.wattsOutSum"` // total output power (all ports), W
@@ -88,7 +88,7 @@ func (c *Client) DeviceList() ([]DeviceInfo, error) {
 	return devices, nil
 }
 
-func (c *Client) DeviceQuota(sn string) (*DeviceStatus, error) {
+func (c *Client) DeviceTelemetry(sn string) (*Telemetry, error) {
 	path := "/iot-open/sign/device/quota/all"
 
 	params := make(map[string]string)
@@ -99,7 +99,7 @@ func (c *Client) DeviceQuota(sn string) (*DeviceStatus, error) {
 		return nil, fmt.Errorf("device quota: %w", err)
 	}
 
-	var deviceStatus DeviceStatus
+	var deviceStatus Telemetry
 	if err := json.Unmarshal(res, &deviceStatus); err != nil {
 		return nil, fmt.Errorf("device quota: decode data: %w", err)
 	}

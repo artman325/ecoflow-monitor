@@ -16,7 +16,7 @@ import (
 
 type refreshResult struct {
 	device *ecoflow.DeviceInfo
-	status *ecoflow.DeviceStatus
+	status *ecoflow.Telemetry
 	err    error
 }
 
@@ -91,7 +91,7 @@ func refresh(c *ecoflow.Client, cfg *config.Config) refreshResult {
 		return res
 	}
 
-	res.status, res.err = c.DeviceQuota(res.device.SN)
+	res.status, res.err = c.DeviceTelemetry(res.device.SN)
 
 	return res
 }
