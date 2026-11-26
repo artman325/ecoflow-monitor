@@ -49,7 +49,7 @@ type Telemetry struct {
 	InputWatts     int `json:"inv.inputWatts"`    // AC input (grid) power, W; 0 while plugged in means grid power is out
 	OutputWatts    int `json:"inv.outputWatts"`   // AC outlets output power, W
 	Temp           int `json:"bmsMaster.temp"`    // main battery temperature, °C
-	SysChgDsgState int `json:"pd.sysChgDsgState"` // observed: 1 = discharging, 2 = charging; passthrough TBD
+	SysChgDsgState int `json:"pd.sysChgDsgState"` // `2` = charging, `1` = not charging(both discharging and passthrough). Use input/output watts to tell them apart.
 }
 
 type APIError struct {
@@ -62,6 +62,10 @@ const (
 	codeInvalidSignature   = "8521"
 	codeDeviceNoPermission = "8512" // observed for an SN that is not bound to the account
 )
+
+func (d *DeviceInfo) IsOnline() bool {
+	return d.Online == 1
+}
 
 func (e *APIError) Error() string {
 	return fmt.Sprintf("api error %s: %s", e.Code, e.Message)
@@ -96,15 +100,15 @@ func (c *Client) DeviceTelemetry(sn string) (*Telemetry, error) {
 
 	res, err := c.get(path, params)
 	if err != nil {
-		return nil, fmt.Errorf("device quota: %w", err)
+		return nil, fmt.Errorf("device telemetry: %w", err)
 	}
 
-	var deviceStatus Telemetry
-	if err := json.Unmarshal(res, &deviceStatus); err != nil {
-		return nil, fmt.Errorf("device quota: decode data: %w", err)
+	var telemetry Telemetry
+	if err := json.Unmarshal(res, &telemetry); err != nil {
+		return nil, fmt.Errorf("device telemetry: decode data: %w", err)
 	}
 
-	return &deviceStatus, nil
+	return &telemetry, nil
 
 }
 

@@ -15,9 +15,35 @@ import (
 )
 
 type refreshResult struct {
-	device *ecoflow.DeviceInfo
-	status *ecoflow.Telemetry
-	err    error
+	device    *ecoflow.DeviceInfo
+	telemetry *ecoflow.Telemetry
+	err       error
+}
+type refreshState struct {
+	lastTelemetry *ecoflow.Telemetry
+	lastUpdate    time.Time
+	failures      int
+}
+
+// minutes
+var backoffSteps = []int{0, 1, 2, 3, 5}
+
+func (st *refreshState) update(rr *refreshResult, now time.Time) {
+	if rr.err != nil {
+		st.failures++
+	} else {
+		st.failures = 0
+	}
+	if rr.err == nil && rr.telemetry != nil {
+		st.lastTelemetry = rr.telemetry
+	}
+	if rr.err == nil && rr.telemetry != nil && rr.device.IsOnline() {
+		st.lastUpdate = now
+	}
+
+}
+func (st *refreshState) needTelemetry(online bool) bool {
+	return st.lastTelemetry == nil || online
 }
 
 func main() {
@@ -47,10 +73,12 @@ func main() {
 }
 
 func run(ctx context.Context, c *ecoflow.Client, cfg *config.Config) {
+	var st refreshState
 
-	pause := 5 * time.Second
 	for {
-		res := refresh(c, cfg)
+
+		res := refresh(c, cfg.SN, &st)
+
 		if res.err != nil {
 			fmt.Fprintln(os.Stderr, res.err)
 			fmt.Fprintln(os.Stderr, errorCategory(res.err))
@@ -58,11 +86,15 @@ func run(ctx context.Context, c *ecoflow.Client, cfg *config.Config) {
 			if errors.Is(res.err, ecoflow.ErrMultipleDevices) {
 				fmt.Fprintln(os.Stderr, "hint: set EF_SN in .env to one of the SNs above")
 			}
-		} else {
-
-			fmt.Println(res.device)
-			fmt.Println(res.status)
 		}
+
+		st.update(&res, time.Now())
+
+		// send to registry. for now just print
+		fmt.Println(res.device)
+		fmt.Println(st.lastTelemetry)
+
+		pause := calculatePause(cfg.Interval, st.failures)
 
 		select {
 		case <-ctx.Done():
@@ -75,7 +107,24 @@ func run(ctx context.Context, c *ecoflow.Client, cfg *config.Config) {
 	}
 }
 
-func refresh(c *ecoflow.Client, cfg *config.Config) refreshResult {
+// calculatePause returns the delay before the next poll.
+// After consecutive failures it backs off to 1, 2, 3 and then 5 minutes,
+// but never polls more often than the configured interval:
+// the backoff only exists to stop hammering the API, so if the interval
+// is already longer than the current step, the interval is used as is.
+func calculatePause(interval time.Duration, failures int) time.Duration {
+	if failures < 0 {
+		failures = 0
+	}
+	idx := failures
+	if idx >= len(backoffSteps) {
+		idx = len(backoffSteps) - 1
+	}
+
+	return max(interval, (time.Minute * time.Duration(backoffSteps[idx])))
+}
+
+func refresh(c *ecoflow.Client, sn string, st *refreshState) refreshResult {
 
 	var res refreshResult
 	var devices []ecoflow.DeviceInfo
@@ -85,13 +134,15 @@ func refresh(c *ecoflow.Client, cfg *config.Config) refreshResult {
 		return res
 	}
 
-	res.device, res.err = ecoflow.SelectDevice(devices, cfg.SN)
+	res.device, res.err = ecoflow.SelectDevice(devices, sn)
 
 	if res.err != nil {
 		return res
 	}
 
-	res.status, res.err = c.DeviceTelemetry(res.device.SN)
+	if st.needTelemetry(res.device.IsOnline()) {
+		res.telemetry, res.err = c.DeviceTelemetry(res.device.SN)
+	}
 
 	return res
 }
